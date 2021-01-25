@@ -3,12 +3,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import glob
+from tensorflow.keras.utils import to_categorical
+from scipy.io import loadmat
 
 
 class DataLoader:
     def __init__(self, img_size):
         self.ROOT = '/media/bonilla/HDD_2TB_basura/databases/102flowers/102segmentations/segmim'
-        self.IMAGES = np.array(glob.glob(os.path.join(self.ROOT, '*')))
+        self.IMAGES = np.array(sorted(glob.glob(os.path.join(self.ROOT, '*')), key=lambda x: int(os.path.split(x)[-1][7: 12])))
+        self.LABELS = loadmat('/media/bonilla/HDD_2TB_basura/databases/102flowers/imagelabels.mat')['labels'][0]
         self.NUM_IMAGES = len(self.IMAGES)
         self.IMG_SIZE = img_size
         self.clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
@@ -81,16 +84,18 @@ class DataLoader:
                            image_aug, (255, 255, 255)).astype(np.uint8)
         if label.lower() == 'x':
             image = self.combine_sketches(cropped)
-            image = np.expand_dims(image, axis=-1)
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
         elif label.lower() == 'y':
             image = cropped
         return (image.astype('float32') - 127.5) / 127.5
 
     def load_batch(self, batch_size):
-        paths = np.random.choice(self.IMAGES, size=(batch_size, ), replace=False)
+        rand_idx = np.random.choice(self.NUM_IMAGES, size=(batch_size, ), replace=True)
+        paths = self.IMAGES[rand_idx]
         rand = np.random.rand(5)
         rot = np.random.randint(0, 3)
         gamma = np.random.rand() * 2. + 0.5
         X = np.array([self.load_image(p, 'x', rand, rot, gamma) for p in paths])
         Y = np.array([self.load_image(p, 'y', rand, rot, gamma) for p in paths])
-        return X, Y
+        labels = to_categorical(self.LABELS[rand_idx] - 1, num_classes=102).astype('float32')
+        return X, Y, labels
